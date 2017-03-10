@@ -17,7 +17,7 @@ namespace GrabEstateInfo
     {
         //数据库连接字符串(web.config来配置)，可以动态更改connectionString支持多数据库.		
         public static string connectionString = "server = 172.28.70.70;database = DB_ACQUIRED_ESTATE_INFO; uid = sa; pwd = 1qaz!QAZ";
-        public static string ProxyConnString = "server = .;database = DB_Proxy; uid = sa; pwd = 1qaz!QAZ";
+        public static string ProxyConnString = "server = 172.28.70.70;database = DB_Proxy; uid = sa; pwd = 1qaz!QAZ";
         public DbHelperSQL()
         {     
         }

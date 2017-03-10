@@ -9,6 +9,8 @@ using HtmlAgilityPack;
 using System.Data;
 using System.Net;
 using System.Data.SqlClient;
+using System.Collections;
+using System.Collections.Specialized;
 
 namespace GrabEstateInfo
 {
@@ -57,175 +59,19 @@ namespace GrabEstateInfo
 
         public static List<DateTime> NowTimes = new List<DateTime>() { DateTime.Now, DateTime.Now };
 
-        public static void GetProxy()
-        {
-            String res = "";
+        public static List<String> LogFileNames = new List<string>();
 
-            try
-            {
-                String url = "http://www.xdaili.cn/ipagent/freeip/getFreeIps?page=1&rows=10";
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-                request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                    "Chrome/50.0.2661.102 UBrowser/6.0.1471.813 Safari/537.36";
-                request.Accept = "text/html,application/xhtml+xml,application/xml";
-                request.Headers.Add("Accept-Language", "zh-CN,cn;en-US,en");
-                request.Referer = "http://www.xdaili.cn/freeproxy.html";
-                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
-                StreamReader sr = new StreamReader(response.GetResponseStream(), Encoding.UTF8);
-                res = sr.ReadToEnd();
-                sr.Close();
-                sr.Dispose();
-
-                //using (StreamReader sr = new StreamReader("test.txt",Encoding.GetEncoding("GB2312")))
-                //{
-                //    res = sr.ReadToEnd();
-                //}
-
-                res = res.Substring(res.IndexOf("[{") + 1);
-                res = res.Substring(0, res.IndexOf("}]") + 1);
-
-                String[] ress = res.Split(new String[] { "},{" }, StringSplitOptions.None);
-                for (int i = 0; i < ress.Length; i++)
-                {
-                    ProxyInfo pi = new ProxyInfo();
-
-                    int loca = ress[i].IndexOf("\\\"ip\\\":\\\"") + 9;
-                    if (loca < 0) continue;
-                    int locb = ress[i].IndexOf("\\\"", loca + 1);
-                    if (locb < 0) continue;
-                    pi.IPAddress = ress[i].Substring(loca, locb - loca);
-
-                    loca = ress[i].IndexOf("\\\"port\\\":\\\"") + 11;
-                    if (loca < 0) continue;
-                    locb = ress[i].IndexOf("\\\"", loca + 1);
-                    if (locb < 0) continue;
-                    int Port;
-                    if (!int.TryParse(ress[i].Substring(loca, locb - loca), out Port))
-                    {
-                        continue;
-                    }
-                    pi.Port = Port;
-
-                    pi.Username = "";
-                    pi.Password = "";
-                    pi.LastUsedTime = DateTime.MinValue;
-
-                    if (i == 0)
-                    {
-                        Proxies.Clear();
-                    }
-
-                    Proxies.Add(pi);
-                }
-
-                LastProxyTime = DateTime.Now;
-            }
-            catch (Exception ex)
-            {
-
-            }
-        }
-
-        public static void GetProxy2()
-        {
-            String res = "";
-
-            try
-            {
-                String url = "http://www.xicidaili.com/nn/";
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-                request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                    "Chrome/50.0.2661.102 UBrowser/6.0.1471.813 Safari/537.36";
-                request.Accept = "text/html,application/xhtml+xml,application/xml";
-                request.Headers.Add("Accept-Language", "zh-CN,cn;en-US,en");
-                request.Referer = "http://www.xicidaili.com/";
-                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
-                StreamReader sr = new StreamReader(response.GetResponseStream(), Encoding.UTF8);
-                res = sr.ReadToEnd();
-                sr.Close();
-                sr.Dispose();
-
-                //using (StreamReader sr = new StreamReader("test2.txt", Encoding.GetEncoding("GB2312")))
-                //{
-                //    res = sr.ReadToEnd();
-                //}
-
-                HtmlDocument hd = new HtmlDocument();
-                hd.LoadHtml(res);
-                HtmlNode RootNode = hd.DocumentNode;
-
-                HtmlNodeCollection ProxyNodes = RootNode.SelectNodes("//table[@id='ip_list']//tr");
-                if (ProxyNodes == null)
-                {
-                    return;
-                }
-
-                bool NeedClear = true;
-
-                for (int i = 1; i < ProxyNodes.Count; i++)
-                {
-                    HtmlNode[] PIs = ProxyNodes[i].Elements("td").ToArray();
-                    if (PIs.Length != 10)
-                    {
-                        continue;
-                    }
-
-                    for (int j = 6; j < 8; j++)
-                    {
-                        if (PIs[j].Element("div") != null && PIs[j].Element("div").Attributes["title"] != null)
-                        {
-                            String LagStr = PIs[j].Element("div").Attributes["title"].Value;
-                            if (String.IsNullOrWhiteSpace(LagStr) || LagStr.Contains("秒") == false)
-                            {
-                                continue;
-                            }
-
-                            LagStr = LagStr.Replace("秒", "");
-                            double Lag;
-                            if (double.TryParse(LagStr, out Lag) == false)
-                            {
-                                continue;
-                            }
-
-                            if (Lag > 3)
-                            {
-                                continue;
-                            }
-                        }
-                    }
-
-                    String IPStr = PIs[1].InnerText;
-                    String PortStr = PIs[2].InnerText;
-
-                    IPAddress IP;
-                    int Port;
-                    if (IPAddress.TryParse(IPStr, out IP) == false ||
-                        int.TryParse(PortStr, out Port) == false)
-                    {
-                        continue;
-                    }
-
-                    if (NeedClear)
-                    {
-                        NeedClear = false;
-                        Proxies.Clear();
-                    }
-
-                    Proxies.Add(new ProxyInfo() { IPAddress = IPStr, Port = Port });
-
-                }
-
-                LastProxyTime = DateTime.Now;
-                TickIndex = 0;
-            }
-            catch (Exception ex)
-            {
-
-            }
-        }
 
         public static void GetValidatedProxy()
         {
+            //todo:bypass
+            //Proxies.Clear();
+            //Proxies.Add(new ProxyInfo() { IPAddress = "121.193.143.249", Port = 80 });
+            //Proxies.Add(new ProxyInfo() { IPAddress = "203.90.144.145", Port = 80 });
+            //if (TickIndex > 1) TickIndex = 0;
+            //return;
+            //--------------------------------------
+
             bool Pass = false;
             while (!Pass)
             {
@@ -256,6 +102,12 @@ namespace GrabEstateInfo
                             pi.LastUsedTime = DateTime.Now;
                             Proxies.Add(pi);
                         }
+
+                        LastProxyTime = DateTime.Now;
+                        if (TickIndex >= Proxies.Count)
+                        {
+                            TickIndex = 0;
+                        }
                     }
                     catch (System.Data.SqlClient.SqlException ex)
                     {
@@ -266,7 +118,6 @@ namespace GrabEstateInfo
             }
 
         }
-
 
         public static byte[] GZipDecompress(byte[] data)
         {
@@ -367,15 +218,16 @@ namespace GrabEstateInfo
                     request.Accept = "text/html,application/xhtml+xml,application/xml";
                     request.Headers.Add("Accept-Language", "zh-CN,cn;en-US,en");
                     request.Referer = url;
-                    request.Timeout = 25 * 1000;
-                    request.ReadWriteTimeout = 5 * 1000;
+                    request.Timeout = 10 * 1000;
+                    request.ReadWriteTimeout = 3 * 1000;
 
                     myProxy = new WebProxy(Proxies[TickIndex].IPAddress, Proxies[TickIndex].Port);
                     myProxy.Credentials = new NetworkCredential(Proxies[TickIndex].Username, Proxies[TickIndex].Password);
                     request.Proxy = myProxy;
 
                     DateTime BeginTime = DateTime.Now;
-                    Console.WriteLine(BeginTime.ToString("HH:mm:ss.fff") + " Downloading " + url);
+                    Console.WriteLine(BeginTime.ToString("HH:mm:ss.fff") + " Downloading " + url +
+                        " with " + Proxies[TickIndex].IPAddress + ":" + Proxies[TickIndex].Port);
 
                     response = (HttpWebResponse)request.GetResponse();
                     if (response.StatusCode == HttpStatusCode.OK)
@@ -387,14 +239,22 @@ namespace GrabEstateInfo
                                 using (StreamReader sr1 = new StreamReader(st, Encoding.Default))
                                 {
                                     html = sr1.ReadToEnd();
+                                    if (html.Length < 2000)
+                                    {
+                                        throw new Exception("Unreasonable content.");
+                                    }
                                 }
                             }
                         }
                         else
                         {
-                            using (StreamReader sr = new StreamReader(response.GetResponseStream(), Encoding.GetEncoding("GB2312")))
+                            using (StreamReader sr = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
                             {
                                 html = sr.ReadToEnd();
+                                if (html.Length < 2000)
+                                {
+                                    throw new Exception("Unreasonable content.");
+                                }
                             }
                         }
 
@@ -405,7 +265,7 @@ namespace GrabEstateInfo
                 catch (Exception ex)
                 {
                     RetryCount++;
-                    Console.WriteLine("Redownloading " + RetryCount + "   " + url);
+                    Console.WriteLine("Redownloading " + RetryCount + "   " + url + " by " + ex.Message);
                     //System.Threading.Thread.Sleep(1500);
                 }
             }
@@ -627,6 +487,52 @@ namespace GrabEstateInfo
 
             return 0;
         }
+
+        public static int GetNoDetailsEstateFromDB(String[] Cities = null)
+        {
+            try
+            {
+                if (Cities == null)
+                {
+                    //只获取结构
+                    EstateDS = DbHelperSQL.Query("select top 0 * from TB_Estate");
+                    if (EstateDS == null || EstateDS.Tables.Count == 0)
+                    {
+                        Console.WriteLine("Query ND estate failed. No records.");
+                        return -1;
+                    }
+                }
+                else
+                {
+                    String Sql = "select * from TB_Estate where city in (";
+                    for (int i = 0; i < Cities.Length; i++)
+                    {
+                        if (i != 0)
+                        {
+                            Sql += ",";
+                        }
+                        Sql += "'" + Cities[i] + "'";
+                    }
+                    Sql += ") and [BatchSign] = '" + BatchSign + "' and EstateType in ('住宅','别墅') " +
+                        "and id not in (select EstateID from TB_EstateDetail) and url like 'http://%' order by ID";
+
+                    EstateDS = DbHelperSQL.Query(Sql);
+                    if (EstateDS == null || EstateDS.Tables.Count == 0)
+                    {
+                        Console.WriteLine("Query ND estate failed. No records.");
+                        return -1;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Query ND estate failed. Access Error.");
+                return -1;
+            }
+
+            return 0;
+        }
+
 
         public static int UpdateCities(bool WithUpdate = true)
         {
@@ -951,7 +857,7 @@ namespace GrabEstateInfo
 
                 int PlateID = (int)PlateDS.Tables[0].Rows[i]["ID"];
 
-                //todo:测试跳过
+                //testskip:测试跳过
                 //if (CityName == "广州" && PlateID < 235) continue;
 
                 String PlateName = PlateDS.Tables[0].Rows[i]["Plate"].ToString();
@@ -1177,11 +1083,11 @@ namespace GrabEstateInfo
 
             for (int i = 0; i < EstateDS.Tables[0].Rows.Count; i++)
             {
-                //todo:测试跳过
+                //testskip:测试跳过
                 //int[] ids = new int[] { 18468, 18778, 18861, 18862, 18887, 18890, 19058, 19059, 19060, 19079, 19080, 19123, 19141, 19156, 19204, 19683, 19718, 19777, 19936, 19938, 19940, 19941, 19943, 19947, 19948, 19950, 19952, 19978, 19996, 19997, 19998, 19999, 20000, 20001, 20002, 20003, 20004, 20005, 20006, 20007, 20009, 20010, 20011, 20012, 20014, 20015, 20019, 20021, 20022, 20031, 20040, 20043, 20044, 20045, 20046, 20047, 20048, 20049, 20164, 20186, 20187, 20188, 20189, 20190, 20191, 20192, 20193, 20194, 20196, 20197, 20198, 20199, 20200, 20201, 20203, 20204, 20205, 20206, 20207, 20208, 20209, 20210, 20211, 20212, 20213, 20214, 20274, 20296, 20569, 20572, 20619, 20627, 20715, 20716, 20830, 20866, 20872, 21190, 21341, 21620, 21658, 21671, 21673, 21718, 21730, 21840, 21934, 22029, 22087, 22127, 22211, 22951, 22977, 23081, 23086, 23106, 23246, 23274, 23305, 23355, 23542, 23551, 23552, 23602, 23605, 23667, 23675, 23825, 24003, 24036, 24244, 24248, 24286, 24421, 24488, 24644, 24656, 24667, 24818, 24940, 25130, 25265, 25281, 25336, 25337, 25357, 25358, 25378, 25402, 25406, 25528, 25544, 25663, 25905, 25996, 25997, 25999, 26099, 26100, 26108, 26265, 26279, 26285, 26334, 26410, 26462, 26520, 26566, 26614, 26617, 26687, 26773, 26857, 26884, 26906, 26907, 26909, 26912, 26930, 26937, 26941, 26991, 26992, 26993, 26994, 26995, 26996, 26997, 26998, 26999, 27000, 27001, 27003, 27004, 27009, 27010, 27011, 27012, 27014, 27015, 27016, 27017, 27019, 27020, 27021, 27022, 27023, 27024, 27030, 27031, 27032, 27033, 27034, 27040, 27041, 27042, 27043, 27044, 27095, 27096, 27097, 27098, 27099, 27100, 27101, 27102, 27104, 27105, 27106, 27107, 27109, 27110, 27111, 27112, 27120, 27121, 27122, 27139, 27626, 27635, 27938, 27941, 27943, 27944, 27945, 27946, 27948, 27950, 27951, 27952, 27953, 27954, 28036, 28042, 28048, 28078, 28092, 28139, 28159, 28166, 28168, 28183, 28199, 28290, 28379, 28716, 28990 };
                 //if (i == EstateDS.Tables[0].Rows.Count - 1) DbHelperSQL.Update("select top 0 * from TB_EstateDetail", EstateDetailDS.Tables[0]);
                 //if (!ids.Contains((int)EstateDS.Tables[0].Rows[i]["ID"])) continue;
-                //if ((int)EstateDS.Tables[0].Rows[i]["ID"] <= 106258) continue;
+                //if ((int)EstateDS.Tables[0].Rows[i]["ID"] <= 114807 && Cities.Contains("深圳")) continue;
 
 
 
@@ -1417,12 +1323,1415 @@ namespace GrabEstateInfo
                     #endregion
 
                     #region DetailAnalysis
+                    hd = new HtmlDocument();
+                    hd.LoadHtml(html);
+                    RootNode = hd.DocumentNode;
+
+                    DataRow dr = EstateDetailDS.Tables[0].NewRow();
+                    String Content = "";
+                    HtmlNode Node;
+                    HtmlNode[] Nodes;
+
+                    dr["Source"] = "fang.com";
+                    dr["CityID"] = CityID;
+                    dr["City"] = CityName;
+                    dr["DistrictID"] = DistrictID;
+                    dr["District"] = DistrictName;
+                    dr["PlateID"] = PlateID;
+                    dr["Plate"] = PlateName;
+                    dr["EstateID"] = EstateID;
+                    dr["EstateName"] = EstateName;
+                    dr["Status"] = 1;
+                    dr["CreateTime"] = NowTime;
+                    dr["UpdateTime"] = NowTime;
+                    dr["BatchSign"] = BatchSign;
+                    dr["URL"] = url;
+
+                    NavNodes = RootNode.SelectNodes("//div[@class='con_left']/div");
+                    //navnodes页面版本检测: 大红新版 / 白绿旧版
+                    if (NavNodes != null)
+                    {
+                        //大红新版  --住宅
+                        for (int j = 0; j < NavNodes.Count; j++)
+                        {
+                            //价格栏块
+                            Nodes = NavNodes[j].Elements("dl").ToArray();
+                            if (Nodes.Length > 0)
+                            {
+                                for (int k = 0; k < Nodes.Length; k++)
+                                {
+                                    dr["Reserved"] += Nodes[k].InnerText.Replace("\r\n", "").Replace("           ", "  ").Trim() + "; ";
+                                }
+
+                                continue;
+                            }
+
+                            //基本信息
+                            Nodes = NavNodes[j].Elements("div").ToArray();
+                            if (Nodes.Length >= 2 && Nodes[0].Element("h3") != null
+                                && Nodes[0].Element("h3").InnerText == "基本信息")
+                            {
+                                Content = Nodes[1].InnerText;
+                                if (Content.IndexOf("<!--") >= 0)
+                                {
+                                    Content = Content.Substring(0, Content.IndexOf("<!--"));
+                                }
+                                dr["OverallBaseInfo"] = Content.Replace("\\r\\n", "").Replace("\r\n", "").Replace("&nbsp;", "")
+                                    .Replace("\\t", " ").Replace("\t", " ").Replace("        ", "  ").Trim();
+
+                                #region 基本信息个项
+                                //基本信息个项
+                                Nodes = NavNodes[j].Elements("div").ToArray()[1].Element("dl").Elements("dd").ToArray();
+                                if (Nodes.Length > 0)
+                                {
+                                    for (int k = 0; k < Nodes.Length; k++)
+                                    {
+                                        Node = Nodes[k];
+
+                                        if (Node.Element("strong").InnerText.Contains("小区地址"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["Address"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["Address"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("项目特色"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["Feature"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["Feature"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("邮&nbsp;&nbsp;&nbsp;&nbsp;编"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["ZipCode"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["ZipCode"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("环线位置"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["Circle"] = Node.Attributes["title"].Value.Replace("：", "");
+                                            }
+                                            else
+                                            {
+                                                dr["Circle"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("产权描述"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["PossessionStatus"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["PossessionStatus"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("物业类别"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["PropertyType"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["PropertyType"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("竣工时间"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            String BuildDateString = null;
+                                            DateTime BuildDateTime;
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                BuildDateString = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                BuildDateString = Node.InnerText;
+                                            }
+
+                                            if (DateTime.TryParse(BuildDateString, out BuildDateTime))
+                                            {
+                                                dr["BuildDate"] = BuildDateTime;
+                                            }
+
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("开 发 商"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["Developer"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["Developer"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("建筑结构"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["BuildingStructure"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["BuildingStructure"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("建筑类别"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["BuildingType"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["BuildingType"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("建筑面积"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["BuildingArea"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["BuildingArea"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("占地面积"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["LandArea"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["LandArea"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("当期户数"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["LastOpenRoomCount"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["LastOpenRoomCount"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("总 户 数"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["TotalRoomCount"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["TotalRoomCount"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("绿 化 率"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["GreeningRate"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["GreeningRate"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("容 积 率"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["PlotRate"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["PlotRate"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("物 业 费"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["PropertyFee"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["PropertyFee"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("物业办公电话"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["PropertyManagerTel"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["PropertyManagerTel"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("物业办公地点"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Attributes["title"] != null)
+                                            {
+                                                dr["PropertyManagerAddress"] = Node.Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["PropertyManagerAddress"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+                                    }
+                                }
+
+                                #endregion 基本信息个项
+
+                                continue;
+                            }
+
+                            //配套设施
+                            Nodes = NavNodes[j].Elements("div").ToArray();
+                            if (Nodes.Length >= 2 && Nodes[0].Element("h3") != null
+                                && Nodes[0].Element("h3").InnerText == "配套设施")
+                            {
+                                Content = Nodes[1].InnerText;
+                                if (Content.IndexOf("<!--") >= 0)
+                                {
+                                    Content = Content.Substring(0, Content.IndexOf("<!--"));
+                                }
+                                dr["OverallSupportingInfo"] = Content.Replace("\\r\\n", "").Replace("\r\n", "").Replace("&nbsp;", "")
+                                    .Replace("\\t", " ").Replace("\t", " ").Replace("        ", "  ").Trim();
+
+                                #region 配套设施个项
+                                //配套设施个项
+                                Nodes = NavNodes[j].Elements("div").ToArray()[1].Element("dl").Elements("dd").ToArray();
+                                if (Nodes.Length > 0)
+                                {
+                                    for (int k = 0; k < Nodes.Length; k++)
+                                    {
+                                        Node = Nodes[k];
+
+                                        if (Node.Element("strong").InnerText.Contains("供&nbsp;&nbsp;&nbsp;&nbsp;水"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            //if (Node.Attributes["title"] != null)
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["WaterSupply"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["WaterSupply"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("供&nbsp;&nbsp;&nbsp;&nbsp;暖"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["HeatSupply"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["HeatSupply"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("供&nbsp;&nbsp;&nbsp;&nbsp;电"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["PowerSupply"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["PowerSupply"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("通讯设备"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["CommunicationSupply"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["CommunicationSupply"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("燃&nbsp;&nbsp;&nbsp;&nbsp;气"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["GasSupply"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["GasSupply"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("电梯服务"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["ElevatorService"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["ElevatorService"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("安全管理"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["SecureService"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["SecureService"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("卫生服务"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["CleanService"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["CleanService"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("小区入口"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["EstateEntrance"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["EstateEntrance"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("停 车 位"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["ParkInfo"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["ParkInfo"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+                                    }
+                                }
+
+                                Nodes = NavNodes[j].Elements("div").ToArray()[1].Element("dl").Elements("dt").ToArray();
+                                if (Nodes.Length > 0)
+                                {
+                                    for (int k = 0; k < Nodes.Length; k++)
+                                    {
+                                        Node = Nodes[k];
+
+                                        if (Node.Element("strong").InnerText.Contains("供&nbsp;&nbsp;&nbsp;&nbsp;水"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["WaterSupply"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["WaterSupply"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("供&nbsp;&nbsp;&nbsp;&nbsp;暖"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["HeatSupply"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["HeatSupply"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("供&nbsp;&nbsp;&nbsp;&nbsp;电"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["PowerSupply"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["PowerSupply"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("通讯设备"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["CommunicationSupply"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["CommunicationSupply"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("燃&nbsp;&nbsp;&nbsp;&nbsp;气"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["GasSupply"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["GasSupply"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("电梯服务"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["ElevatorService"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["ElevatorService"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("安全管理"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["SecureService"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["SecureService"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("卫生服务"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["CleanService"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["CleanService"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("小区入口"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["EstateEntrance"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["EstateEntrance"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.Element("strong").InnerText.Contains("停 车 位"))
+                                        {
+                                            Node.Element("strong").Remove();
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["ParkInfo"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["ParkInfo"] = Node.InnerText;
+                                            }
+                                            continue;
+                                        }
+                                    }
+                                }
+                                #endregion 配套设施个项
+
+                                continue;
+                            }
+
+                            //小区简介
+                            Nodes = NavNodes[j].Elements("div").ToArray();
+                            if (Nodes.Length >= 2 && Nodes[0].Element("h3") != null
+                                && Nodes[0].Element("h3").InnerText == "小区简介")
+                            {
+                                if (Nodes[1].Element("dl").Element("dt").Element("div") != null)
+                                {
+                                    Content = Nodes[1].Element("dl").Element("dt").Element("div").InnerText;
+                                }
+                                else
+                                {
+                                    Content = Nodes[1].Element("dl").Element("dt").InnerText;
+                                }
+                                if (Content.IndexOf("<!--") >= 0)
+                                {
+                                    Content = Content.Substring(0, Content.IndexOf("<!--"));
+                                }
+                                dr["OverallEstateSummary"] = Content.Replace("\\r\\n", "").Replace("\r\n", "  ").Replace("&nbsp;", "").
+                                    Replace("&nbsp; 更多&gt;&gt;", "").Replace("\\t", " ").Replace("\t", " ").
+                                    Replace("        ", "  ").Replace("&gt;", "").Replace("&lt;", "").Trim();
+
+                                continue;
+                            }
+
+                            //交通状况
+                            Nodes = NavNodes[j].Elements("div").ToArray();
+                            if (Nodes.Length >= 2 && Nodes[0].Element("h3") != null
+                                && Nodes[0].Element("h3").InnerText == "交通状况")
+                            {
+                                Content = Nodes[1].InnerText;
+                                if (Content.IndexOf("<!--") >= 0)
+                                {
+                                    Content = Content.Substring(0, Content.IndexOf("<!--"));
+                                }
+                                dr["OverallTrafficInfo"] = Content.Replace("\\r\\n", "").Replace("\r\n", "  ").Replace("&nbsp;", "").
+                                    Replace("&nbsp; 更多&gt;&gt;", "").Replace("\\t", " ").Replace("\t", " ").
+                                    Replace("        ", "  ").Replace("&gt;", "").Replace("&lt;", "").Trim();
+
+                                continue;
+                            }
+
+                            //周边信息
+                            Nodes = NavNodes[j].Elements("div").ToArray();
+                            if (Nodes.Length >= 2 && Nodes[0].Element("h3") != null
+                                && Nodes[0].Element("h3").InnerText == "周边信息")
+                            {
+                                Content = Nodes[1].InnerText;
+                                if (Content.IndexOf("<!--") >= 0)
+                                {
+                                    Content = Content.Substring(0, Content.IndexOf("<!--"));
+                                }
+                                if (Content.IndexOf("本段合作编辑者") >= 0)
+                                {
+                                    Content = Content.Substring(0, Content.IndexOf("本段合作编辑者"));
+                                }
+
+                                dr["OverallAroundInfo"] = Content.Replace("\\r\\n", "").Replace("\r\n", "  ").Replace("&nbsp;", "").
+                                    Replace("&nbsp; 更多&gt;&gt;", "").Replace("\\t", " ").Replace("\t", " ").
+                                    Replace("        ", "  ").Replace("&gt;", "").Replace("&lt;", "").Trim();
+
+                                continue;
+                            }
+                        }
+
+                        EstateDetailDS.Tables[0].Rows.Add(dr);
+                    }
+                    #region BlueWhiteVersionDetails
+                    else
+                    {
+                        //蓝白旧版 --商铺 目前只匹配上海
+                        NavNodes = RootNode.SelectNodes("//div[@class='lpbl']/div");
+
+                        if (NavNodes == null)
+                        {
+                            Console.WriteLine("*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 详情页面解析失败,本小区跳过.***");
+                            using (StreamWriter sw = new StreamWriter(DateTime.Now.ToString("yyyyMMdd") + " " + CityName + ".txt",
+                                true, Encoding.GetEncoding("GB2312")))
+                            {
+                                sw.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + "    \t" + "*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 详情页面解析失败,本小区跳过.***");
+                                sw.Flush();
+                            }
+                            continue;   //next estate
+                        }
+
+                        dr["Reserved2"] = "Blue White Version.";
+
+                        for (int j = 0; j < NavNodes.Count; j++)
+                        {
+                            //基本信息
+                            Nodes = NavNodes[j].Elements("dl").ToArray();
+                            if (Nodes.Length >= 2 && Nodes[0].Element("dt") != null
+                                && Nodes[0].Element("dt").InnerText == "基本信息")
+                            {
+                                Content = Nodes[1].InnerText;
+                                if (Content.IndexOf("<!--") >= 0)
+                                {
+                                    Content = Content.Substring(0, Content.IndexOf("<!--"));
+                                }
+                                dr["OverallBaseInfo"] = Content.Substring(0, Content.IndexOf("本段合作编辑者"))
+                                    .Replace("\\r\\n", "").Replace("\r\n", "").Replace("&nbsp;", "")
+                                    .Replace("\\t", " ").Replace("\t", " ").Replace("        ", "  ").Trim();
+
+                                #region 基本信息个项
+                                //基本信息个项
+                                Nodes = NavNodes[j].Elements("dl").ToArray()[1].Elements("dd").ToArray();
+                                if (Nodes.Length > 0)
+                                {
+                                    for (int k = 0; k < Nodes.Length; k++)
+                                    {
+                                        Node = Nodes[k];
+
+                                        if (Node.InnerText.Contains("楼盘地址"))
+                                        {
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["Address"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["Address"] = Node.InnerText.Replace("楼盘地址：", "").Trim();
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.InnerText.Contains("项目特色"))
+                                        {
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["Feature"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["Feature"] = Node.InnerText.Replace("项目特色：", "").Trim();
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.InnerText.Contains("环线位置"))
+                                        {
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["Circle"] = Node.Element("span").Attributes["title"].Value.Replace("：", "");
+                                            }
+                                            else
+                                            {
+                                                dr["Circle"] = Node.InnerText.Replace("环线位置：", "").Trim();
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.InnerText.Contains("物业类别"))
+                                        {
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["PropertyType"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["PropertyType"] = Node.InnerText.Replace("物业类别：", "").Trim();
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.InnerText.Contains("竣工时间"))
+                                        {
+                                            String BuildDateString = null;
+                                            DateTime BuildDateTime;
+
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                BuildDateString = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                BuildDateString = Node.InnerText.Replace("竣工时间：", "").Trim();
+                                            }
+
+                                            if (DateTime.TryParse(BuildDateString, out BuildDateTime))
+                                            {
+                                                dr["BuildDate"] = BuildDateTime;
+                                            }
+
+                                            continue;
+                                        }
+
+                                        if (Node.InnerText.Contains("开 发 商"))
+                                        {
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["Developer"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["Developer"] = Node.InnerText.Replace("开 发 商：", "").Trim();
+                                            }
+                                            continue;
+                                        }
+                                        if (Node.InnerText.Contains("建筑类别"))
+                                        {
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["BuildingType"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["BuildingType"] = Node.InnerText.Replace("建筑类别：", "").Trim();
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.InnerText.Contains("建筑面积"))
+                                        {
+
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["BuildingArea"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["BuildingArea"] = Node.InnerText.Replace("建筑面积：", "").Trim();
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.InnerText.Contains("占地面积"))
+                                        {
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["LandArea"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["LandArea"] = Node.InnerText.Replace("占地面积：", "").Trim();
+                                            }
+                                            continue;
+                                        }
+
+                                        if (Node.InnerText.Contains("物 业 费"))
+                                        {
+                                            if (Node.Element("span") != null && Node.Element("span").Attributes["title"] != null)
+                                            {
+                                                dr["PropertyFee"] = Node.Element("span").Attributes["title"].Value;
+                                            }
+                                            else
+                                            {
+                                                dr["PropertyFee"] = Node.InnerText.Replace("物 业 费：", "").Trim();
+                                            }
+                                            continue;
+                                        }
+                                    }
+                                }
+
+                                #endregion 基本信息个项
+
+                                continue;
+                            }
+
+                            //小区简介
+                            Nodes = NavNodes[j].Elements("dl").ToArray();
+                            if (Nodes.Length >= 1 && Nodes[0].Element("dt") != null
+                                && Nodes[0].Element("dt").InnerText == "楼盘简介")
+                            {
+                                Nodes = NavNodes[j].Elements("div").ToArray();
+                                if (Nodes.Length >= 1)
+                                {
+                                    Content = Nodes[0].InnerText;
+                                    if (Content.IndexOf("<!--") >= 0)
+                                    {
+                                        Content = Content.Substring(0, Content.IndexOf("<!--"));
+                                    }
+                                    dr["OverallEstateSummary"] = Content.Replace("\\r\\n", "").Replace("\r\n", "  ").Replace("&nbsp;", "").
+                                        Replace("&nbsp; 更多&gt;&gt;", "").Replace("\\t", " ").Replace("\t", " ").
+                                        Replace("        ", "  ").Replace("&gt;", "").Replace("&lt;", "").Trim();
+                                }
+
+                                continue;
+                            }
+
+                            //交通状况
+                            Nodes = NavNodes[j].Elements("dl").ToArray();
+                            if (Nodes.Length >= 2 && Nodes[0].Element("dt") != null
+                                && Nodes[0].Element("dt").InnerText == "交通状况")
+                            {
+                                Content = Nodes[1].InnerText;
+                                if (Content.IndexOf("<!--") >= 0)
+                                {
+                                    Content = Content.Substring(0, Content.IndexOf("<!--"));
+                                }
+                                dr["OverallTrafficInfo"] = Content.Replace("\\r\\n", "").Replace("\r\n", "  ").Replace("&nbsp;", "").
+                                    Replace("&nbsp; 更多&gt;&gt;", "").Replace("\\t", " ").Replace("\t", " ").
+                                    Replace("        ", "  ").Replace("&gt;", "").Replace("&lt;", "").Trim();
+
+                                continue;
+                            }
+
+                            //周边信息
+                            Nodes = NavNodes[j].Elements("dl").ToArray();
+                            if (Nodes.Length >= 2 && Nodes[0].Element("dt") != null
+                                && Nodes[0].Element("dt").InnerText == "周边信息")
+                            {
+                                Content = Nodes[1].InnerText;
+                                if (Content.IndexOf("<!--") >= 0)
+                                {
+                                    Content = Content.Substring(0, Content.IndexOf("<!--"));
+                                }
+                                if (Content.IndexOf("本段合作编辑者") >= 0)
+                                {
+                                    Content = Content.Substring(0, Content.IndexOf("本段合作编辑者"));
+                                }
+
+                                dr["OverallAroundInfo"] = Content.Replace("\\r\\n", "").Replace("\r\n", "  ").Replace("&nbsp;", "").
+                                    Replace("&nbsp; 更多&gt;&gt;", "").Replace("\\t", " ").Replace("\t", " ").
+                                    Replace("        ", "  ").Replace("&gt;", "").Replace("&lt;", "").Trim();
+
+                                continue;
+                            }
+                        }
+
+                        EstateDetailDS.Tables[0].Rows.Add(dr);
+                    }
+                    #endregion
+
                     //-------------------------------------------------------------------------------
-                    //TODO:test
-                    //using (StreamReader sr = new StreamReader("demoestate2.txt", Encoding.GetEncoding("GB2312")))
+                    #endregion DetailAnalysis
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                        " " + EstateID + " 详情数据获取失败,本小区跳过.*** 出错信息: " + ex.Message);
+                    using (StreamWriter sw = new StreamWriter(DateTime.Now.ToString("yyyyMMdd") + " " + CityName + ".txt",
+                        true, Encoding.GetEncoding("GB2312")))
+                    {
+                        sw.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + "    \t" + "*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                        " " + EstateID + " 详情数据获取失败,本小区跳过.***出错信息: " + ex.Message);
+                        sw.Flush();
+                    }
+
+                    continue;
+
+                }
+
+                if ((EstateDetailDS.Tables[0].Rows.Count % 100 == 0 && EstateDetailDS.Tables[0].Rows.Count > RecordCount)
+                    || i == EstateDS.Tables[0].Rows.Count - 1)
+                {
+                    //更新数据库
+                    bool UpdateDone = false;
+
+                    Console.WriteLine("Update estate details ...");
+
+                    //尝试五次 间隔5秒
+                    for (int trycount = 1; trycount <= 5; trycount++)
+                    {
+                        try
+                        {
+                            DbHelperSQL.Update("select top 0 * from TB_EstateDetail", EstateDetailDS.Tables[0]);
+                            UpdateDone = true;
+                            Console.WriteLine("Done.");
+                            break;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("Update estate detail failed " + trycount + " time(s). Access Error.");
+                            System.Threading.Thread.Sleep(5000);
+                        }
+                    }
+
+                    //如果更新失败 等5分钟 再尝试5次 间隔30秒
+                    if (UpdateDone == false)
+                    {
+                        System.Threading.Thread.Sleep(300 * 1000);
+
+                        for (int trycount = 1; trycount <= 5; trycount++)
+                        {
+                            //更新数据库
+                            try
+                            {
+                                DbHelperSQL.Update("select top 0 * from TB_EstateDetail", EstateDetailDS.Tables[0]);
+                                UpdateDone = true;
+                                Console.WriteLine("Done.");
+                                break;
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("Update estate detail failed " + trycount + " time(s). Access Error.");
+                                System.Threading.Thread.Sleep(30 * 1000);
+                            }
+                        }
+                    }
+
+                    //如果再失败 放弃本批次更新 等下批次再试 
+
+                    //最后一条记录 再试5次
+                    if (UpdateDone == false && i == EstateDS.Tables[0].Rows.Count - 1)
+                    {
+                        System.Threading.Thread.Sleep(300 * 1000);
+
+                        for (int trycount = 1; trycount <= 5; trycount++)
+                        {
+                            //更新数据库
+                            try
+                            {
+                                DbHelperSQL.Update("select top 0 * from TB_EstateDetail", EstateDetailDS.Tables[0]);
+                                UpdateDone = true;
+                                Console.WriteLine("Done.");
+                                break;
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("Update estate detail failed " + trycount + " time(s). Access Error.");
+                                System.Threading.Thread.Sleep(300 * 1000);
+                            }
+                        }
+                    }
+
+                    RecordCount = EstateDetailDS.Tables[0].Rows.Count;
+                }
+            }
+
+            return 0;
+
+        }
+
+        public static String GetLogFileContent(int ID, bool IsFirstPage)
+        {
+            for (int i = 0; i < LogFileNames.Count; i++)
+            {
+                if (LogFileNames[i].IndexOf(ID.ToString()) >= 0 &&
+                    LogFileNames[i].IndexOf(IsFirstPage ? "小区首页" : "小区详情页") >= 0)
+                {
+                    String html = "";
+                    try
+                    {
+                        using (StreamReader sr = new StreamReader(LogFileNames[i], Encoding.GetEncoding("GB2312")))
+                        {
+                            html = sr.ReadToEnd();
+                        }
+                        return html;
+                    }
+                    catch
+                    {
+                        return "";
+                    }
+                }
+            }
+
+            return "";
+        }
+
+        //从LOG记录中恢复一些
+        public static int FixEstateDetails(String CityString, bool WithUpdate = true)
+        {
+            String[] Cities = CityString.Split(new String[] { ",", " ", "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (GetNoDetailsEstateFromDB(Cities) < 0)
+            {
+                Console.WriteLine("Initialize ND state base info failed.\r\nPress ENTER to exit.");
+                Console.ReadLine();
+                return -1;
+            }
+
+            if (GetEstateDetailInfoFromDB() < 0)
+            {
+                Console.WriteLine("Initialize state base info failed.\r\nPress ENTER to exit.");
+                Console.ReadLine();
+                return -1;
+            }
+
+
+            if (!WithUpdate)
+            {
+                return 0;
+            }
+
+            LogFileNames.Clear();
+            for (int i = 0; i < Cities.Length; i++)
+            {
+                if (Directory.Exists(Cities[i]))
+                {
+                    LogFileNames.AddRange(Directory.GetFiles(Cities[i]));
+                }
+            }
+
+            int RecordCount = 0;
+
+            for (int i = 0; i < EstateDS.Tables[0].Rows.Count; i++)
+            {
+                String url = EstateDS.Tables[0].Rows[i]["URL"].ToString();
+                if (String.IsNullOrWhiteSpace(url))
+                {
+                    continue;
+                }
+
+                String EstateType = EstateDS.Tables[0].Rows[i]["EstateType"].ToString();
+                if (String.IsNullOrWhiteSpace(EstateType) || "住宅别墅".IndexOf(EstateType) < 0)
+                {
+                    continue;
+                }
+
+                int CityID = (int)EstateDS.Tables[0].Rows[i]["CityID"];
+                String CityName = EstateDS.Tables[0].Rows[i]["City"].ToString();
+                int DistrictID = (int)EstateDS.Tables[0].Rows[i]["DistrictID"];
+                String DistrictName = EstateDS.Tables[0].Rows[i]["District"].ToString();
+                int PlateID = (int)EstateDS.Tables[0].Rows[i]["PlateID"];
+                String PlateName = EstateDS.Tables[0].Rows[i]["Plate"].ToString();
+                int EstateID = (int)EstateDS.Tables[0].Rows[i]["ID"];
+                String EstateName = EstateDS.Tables[0].Rows[i]["EstateName"].ToString();
+                DateTime NowTime = DateTime.Now;
+
+                Console.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + " " + CityName + " " + DistrictName + " " + PlateName + " " +
+                    EstateName + " " + EstateID + " / " + i + " / " + EstateDS.Tables[0].Rows.Count);
+                try
+                {
+
+                    int SleepInterval = 2000;
+                    String html = "";
+                    HtmlDocument hd;
+                    HtmlNode RootNode;
+                    HtmlNodeCollection NavNodes;
+                    bool FileNotExisted;
+
+                    //if ((DateTime.Now - NowTimes[TickIndex]).TotalMilliseconds < SleepInterval)
                     //{
-                    //    html = sr.ReadToEnd();
+                    //    int SleepSpan = (int)((DateTime.Now - NowTimes[TickIndex]).TotalMilliseconds);
+                    //    Console.WriteLine("Sleep " + (SleepInterval - SleepSpan) + " ms.");
+                    //    System.Threading.Thread.Sleep(SleepInterval - SleepSpan);
                     //}
+                    //NowTimes[TickIndex] = DateTime.Now;
+
+                    html = GetLogFileContent(EstateID, true);
+                    FileNotExisted = String.IsNullOrWhiteSpace(html);
+                    if (FileNotExisted)
+                    {
+                        html = GetWebPageStringWithProxy(url);
+                    }
+                    if (String.IsNullOrWhiteSpace(html))
+                    {
+                        Console.WriteLine("*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                            " " + EstateID + " 小区首页获取失败,本小区跳过.***");
+                        using (StreamWriter sw = new StreamWriter(DateTime.Now.ToString("yyyyMMdd") + " " + CityName + ".txt",
+                            true, Encoding.GetEncoding("GB2312")))
+                        {
+                            sw.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + "    \t" + "*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                            " " + EstateID + " 小区首页获取失败,本小区跳过.***");
+                            sw.Flush();
+                        }
+
+                        continue;
+                    }
+
+                    if (FileNotExisted)
+                    {
+                        if (!Directory.Exists(".\\" + CityName))
+                        {
+                            Directory.CreateDirectory(".\\" + CityName);
+                        }
+                        using (StreamWriter sw = new StreamWriter(".\\" + CityName + "\\" + EstateID + "_" + CityName + "_" + DistrictName + "_" + PlateName +
+                            "_" + EstateName + "_小区首页_" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".txt", true, Encoding.GetEncoding("GB2312")))
+                        {
+                            sw.WriteLine("<!--" + url + "-->");
+                            sw.WriteLine(html);
+                            sw.Flush();
+                        }
+                    }
+
+                    hd = new HtmlDocument();
+                    hd.LoadHtml(html);
+                    RootNode = hd.DocumentNode;
+
+                    //大红新版小区首页
+                    NavNodes = RootNode.SelectNodes("//div[@id='orginalNaviBox']//li//a");
+
+                    if (NavNodes != null)
+                    {
+                        url = "";
+
+                        for (int j = 0; j < NavNodes.Count; j++)
+                        {
+                            if (NavNodes[j].InnerText.Trim() == "小区详情"
+                                && NavNodes[j].Attributes["href"] != null)
+                            {
+                                url = NavNodes[j].Attributes["href"].Value;
+                                break;
+                            }
+                        }
+
+                        if (String.IsNullOrWhiteSpace(url))
+                        {
+                            Console.WriteLine("*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 详情页地址解析失败,本小区跳过.***");
+                            using (StreamWriter sw = new StreamWriter(DateTime.Now.ToString("yyyyMMdd") + " " + CityName + ".txt",
+                                true, Encoding.GetEncoding("GB2312")))
+                            {
+                                sw.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + "    \t" + "*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 详情页地址解析失败,本小区跳过.***");
+                                sw.Flush();
+                            }
+
+                            continue;
+                        }
+
+                        //获取详情页
+                        //if ((DateTime.Now - NowTimes[TickIndex]).TotalMilliseconds < SleepInterval)
+                        //{
+                        //    int SleepSpan = (int)((DateTime.Now - NowTimes[TickIndex]).TotalMilliseconds);
+                        //    Console.WriteLine("Sleep " + (SleepInterval - SleepSpan) + " ms.");
+                        //    System.Threading.Thread.Sleep(SleepInterval - SleepSpan);
+                        //}
+                        //NowTimes[TickIndex] = DateTime.Now;
+
+                        html = GetLogFileContent(EstateID, false);
+                        FileNotExisted = String.IsNullOrWhiteSpace(html);
+                        if (FileNotExisted)
+                        {
+                            html = GetWebPageStringWithProxy(url);
+                        }
+                        if (String.IsNullOrWhiteSpace(html))
+                        {
+                            Console.WriteLine("*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 详情页面获取失败,本小区跳过.***");
+                            using (StreamWriter sw = new StreamWriter(DateTime.Now.ToString("yyyyMMdd") + " " + CityName + ".txt",
+                                true, Encoding.GetEncoding("GB2312")))
+                            {
+                                sw.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + "    \t" + "*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 详情页面获取失败,本小区跳过.***");
+                                sw.Flush();
+                            }
+
+                            continue;
+                        }
+
+                        if (FileNotExisted)
+                        {
+                            if (!Directory.Exists(".\\" + CityName))
+                            {
+                                Directory.CreateDirectory(".\\" + CityName);
+                            }
+                            using (StreamWriter sw = new StreamWriter(".\\" + CityName + "\\" + EstateID + "_" + CityName + "_" + DistrictName + "_" + PlateName +
+                                "_" + EstateName + "_小区详情页_" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".txt", true, Encoding.GetEncoding("GB2312")))
+                            {
+                                sw.WriteLine("<!--" + url + "-->");
+                                sw.WriteLine(html);
+                                sw.Flush();
+                            }
+                        }
+
+                    }
+                    #region BlueWhiteVersion
+                    else
+                    //蓝白旧版小区首页
+                    {
+                        NavNodes = RootNode.SelectNodes("//div[@class='snav_sq']//li//a");
+
+                        if (NavNodes == null)
+                        {
+                            Console.WriteLine("*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 解析失败,本小区跳过.***");
+                            using (StreamWriter sw = new StreamWriter(DateTime.Now.ToString("yyyyMMdd") + " " + CityName + ".txt",
+                                true, Encoding.GetEncoding("GB2312")))
+                            {
+                                sw.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + "    \t" + "*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 解析失败,本小区跳过.***");
+                                sw.Flush();
+                            }
+
+                            continue;
+                        }
+
+                        url = "";
+
+                        for (int j = 0; j < NavNodes.Count; j++)
+                        {
+                            if (NavNodes[j].InnerText.Trim() == "楼盘详情"
+                                && NavNodes[j].Attributes["href"] != null)
+                            {
+                                url = NavNodes[j].Attributes["href"].Value;
+                                break;
+                            }
+                        }
+
+                        if (String.IsNullOrWhiteSpace(url))
+                        {
+                            Console.WriteLine("*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 详情页地址解析失败,本小区跳过.***");
+                            using (StreamWriter sw = new StreamWriter(DateTime.Now.ToString("yyyyMMdd") + " " + CityName + ".txt",
+                                true, Encoding.GetEncoding("GB2312")))
+                            {
+                                sw.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + "    \t" + "*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 详情页地址解析失败,本小区跳过.***");
+                                sw.Flush();
+                            }
+
+                            continue;
+                        }
+
+                        //获取详情页
+                        //if ((DateTime.Now - NowTimes[TickIndex]).TotalMilliseconds < SleepInterval)
+                        //{
+                        //    int SleepSpan = (int)((DateTime.Now - NowTimes[TickIndex]).TotalMilliseconds);
+                        //    Console.WriteLine("Sleep " + (SleepInterval - SleepSpan) + " ms.");
+                        //    System.Threading.Thread.Sleep(SleepInterval - SleepSpan);
+                        //}
+                        //NowTimes[TickIndex] = DateTime.Now;
+
+                        html = GetLogFileContent(EstateID, false);
+                        if (String.IsNullOrWhiteSpace(html))
+                        {
+                            html = GetWebPageStringWithProxy(url);
+                        }
+                        if (String.IsNullOrWhiteSpace(html))
+                        {
+                            Console.WriteLine("*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 详情页面获取失败,本小区跳过.***");
+                            using (StreamWriter sw = new StreamWriter(DateTime.Now.ToString("yyyyMMdd") + " " + CityName + ".txt",
+                                true, Encoding.GetEncoding("GB2312")))
+                            {
+                                sw.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + "    \t" + "*** " + CityName + " " + DistrictName + " " + PlateName + " " + EstateName +
+                                " " + EstateID + " 详情页面获取失败,本小区跳过.***");
+                                sw.Flush();
+                            }
+
+                            continue;
+                        }
+
+
+                        if (FileNotExisted)
+                        {
+                            if (!Directory.Exists(".\\" + CityName))
+                            {
+                                Directory.CreateDirectory(".\\" + CityName);
+                            }
+                            using (StreamWriter sw = new StreamWriter(".\\" + CityName + "\\" + EstateID + "_" + CityName + "_" + DistrictName + "_" + PlateName +
+                                "_" + EstateName + "_小区详情页_" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".txt", true, Encoding.GetEncoding("GB2312")))
+                            {
+                                sw.WriteLine("<!--" + url + "-->");
+                                sw.WriteLine(html);
+                                sw.Flush();
+                            }
+                        }
+
+                    }
+                    #endregion
+
+                    #region DetailAnalysis
                     hd = new HtmlDocument();
                     hd.LoadHtml(html);
                     RootNode = hd.DocumentNode;
@@ -2514,10 +3823,199 @@ namespace GrabEstateInfo
 
     }
 
+
     class Program
     {
+        static void testProxy()
+        {
+            String url = "http://www.66ip.cn/areaindex_2/1.html";
+
+            WebProxy myProxy = new WebProxy("61.129.129.72", 8080);
+
+
+            HttpWebResponse response = null;
+            string html = null;
+
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+            request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 UBrowser/6.0.1471.813 Safari/537.36";
+            request.Accept = "text/html,application/xhtml+xml,application/xml";
+            request.Headers.Add("Accept-Language", "zh-CN,cn;en-US,en");
+            request.Referer = url;
+            request.Timeout = 25 * 1000;
+            request.ReadWriteTimeout = 5 * 1000;
+
+            request.Proxy = myProxy;
+
+            DateTime BeginTime = DateTime.Now;
+
+            response = (HttpWebResponse)request.GetResponse();
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                if (response.ContentEncoding.ToLower().Contains("gzip"))
+                {
+                    using (Stream st = new GZipStream(response.GetResponseStream(), CompressionMode.Decompress))
+                    {
+                        using (StreamReader sr1 = new StreamReader(st, Encoding.Default))
+                        {
+                            html = sr1.ReadToEnd();
+                            if (html.Length < 2000)
+                            {
+                                throw new Exception("Unreasonable content.");
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    using (StreamReader sr = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                    {
+                        html = sr.ReadToEnd();
+                        if (html.Length < 2000)
+                        {
+                            throw new Exception("Unreasonable content.");
+                        }
+                    }
+                }
+
+                Console.WriteLine("in " + Math.Ceiling((DateTime.Now - BeginTime).TotalMilliseconds) + " ms. ");
+            }
+        }
+
+        static void testPost()
+        {
+            string ret = string.Empty;
+            try
+            {
+                byte[] byteArray = Encoding.Default.GetBytes("id=46c9cf8e-ecd8-40cb-b1cf-b3121a21adb3"); //转化
+                HttpWebRequest webReq = (HttpWebRequest)WebRequest.Create(new Uri("http://msdn.itellyou.cn/Category/GetLang"));
+                webReq.Method = "POST";
+                webReq.ContentType = "application/x-www-form-urlencoded";
+
+                webReq.ContentLength = byteArray.Length;
+                Stream newStream = webReq.GetRequestStream();
+                newStream.Write(byteArray, 0, byteArray.Length);//写入参数
+                newStream.Close();
+                //webReq.CookieContainer.Add()
+                HttpWebResponse response = (HttpWebResponse)webReq.GetResponse();
+                StreamReader sr = new StreamReader(response.GetResponseStream(), Encoding.Default);
+                ret = sr.ReadToEnd();
+                sr.Close();
+                response.Close();
+                newStream.Close();
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+
+        static void tetsAJK()
+        {
+            String url = "http://shanghai.anjuke.com/community/view/8586";
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+            request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 UBrowser/6.0.1471.813 Safari/537.36";
+            request.Accept = "text/html,application/xhtml+xml,application/xml";
+            request.Headers.Add("Accept-Language", "zh-CN,cn;en-US,en");
+            request.Referer = url;
+            request.Timeout = 10 * 1000;
+            request.ReadWriteTimeout = 3 * 1000;
+
+            String html;
+
+            HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                if (response.ContentEncoding.ToLower().Contains("gzip"))
+                {
+                    using (Stream st = new GZipStream(response.GetResponseStream(), CompressionMode.Decompress))
+                    {
+                        using (StreamReader sr1 = new StreamReader(st, Encoding.Default))
+                        {
+                            html = sr1.ReadToEnd();
+                            if (html.Length < 2000)
+                            {
+                                throw new Exception("Unreasonable content.");
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    using (StreamReader sr = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                    {
+                        html = sr.ReadToEnd();
+                        if (html.Length < 2000)
+                        {
+                            throw new Exception("Unreasonable content.");
+                        }
+                    }
+                }
+
+            }
+
+
+        }
+
+        public static void SetHeaderValue(WebHeaderCollection header, string name, string value)
+        {
+            var property = typeof(WebHeaderCollection).GetProperty("InnerCollection",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            if (property != null)
+            {
+                var collection = property.GetValue(header, null) as NameValueCollection;
+                collection[name] = value;
+            }
+        }
+
+        static void testCQ315house()
+        {
+            String url = "http://www.cq315house.com/315web/YanZhengCode/YanZhengPage.aspx?fid=26207095";
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+            request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 UBrowser/6.0.1471.813 Safari/537.36";
+            request.Accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8";
+            request.Headers.Add("Accept-Language", "zh-CN,zh;q=0.8,en;q=0.6");
+            SetHeaderValue(request.Headers, "Connection", "keep-alive");
+            request.Host = "www.cq315house.com";
+            request.Referer = url;
+            request.Timeout = 10 * 1000;
+            request.ReadWriteTimeout = 3 * 1000;
+            request.CookieContainer = new CookieContainer();
+            request.CookieContainer.Add(new Cookie("ASP.NET_SessionId", "lw3x2jaokqljuerno5p1lqer", "/", "cq315house.com"));
+
+            request.Method = "post";
+
+            int ret = 3;
+            String postdatastr = "__VIEWSTATE=%2FwEPDwUKLTQyNDAzOTY4MWRkY5SEoS5x2ma5iaW9gauZiLibEp0%3D&__VIEWSTATEGENERATOR=150E47F4&__EVENTVALIDATION=%2FwEWBAKd79L7DwLChPzDDQKM54rGBgKdxMCnCdr%2Fgs%2FIr6QC4jAx3guDjU6wAJ0T" +
+                "&txtCode=" + ret + "&Button1=%E7%A1%AE%E5%AE%9A&hfTableNum=" + ret;
+            byte[] postdata = Encoding.UTF8.GetBytes(postdatastr);
+
+            request.ContentLength = postdata.Length;
+
+            Stream myRequestStream = request.GetRequestStream();
+            myRequestStream.Write(postdata,0, postdata.Length);
+            myRequestStream.Close();
+
+
+            String html;
+
+            HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                using (StreamReader sr = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                {
+                    html = sr.ReadToEnd();
+                }
+            }
+
+
+
+        }
+
         static void Main(string[] args)
         {
+
+
+            //----------------------------------------------------------------------------
             //ESF.InitProxy();
 
             ESF.BatchSign = Guid.NewGuid();
@@ -2546,18 +4044,25 @@ namespace GrabEstateInfo
             //    return;
             //}
 
-            if (File.Exists("cities.txt"))
-            {
-                String Cities = "";
-                using (StreamReader sr = new StreamReader("cities.txt", Encoding.GetEncoding("GB2312")))
-                {
-                    Cities = sr.ReadToEnd();
-                }
-                if (Cities.Length > 1)
-                {
-                    ESF.UpdateEstateDetails(Cities);
-                }
-            }
+            //if (File.Exists("cities.txt"))
+            //{
+            //    String Cities = "";
+            //    using (StreamReader sr = new StreamReader("cities.txt", Encoding.GetEncoding("GB2312")))
+            //    {
+            //        Cities = sr.ReadToEnd();
+            //    }
+            //    if (Cities.Length > 1)
+            //    {
+            //        //ESF.UpdateEstateDetails(Cities);
+            //        ESF.FixEstateDetails(Cities);
+
+            //    }
+            //}
+
+
+
+            testCQ315house();
+
 
 
             return;
